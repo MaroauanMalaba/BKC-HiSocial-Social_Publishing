@@ -58,7 +58,8 @@ export function probeVideo(
 
 export async function compressVideo(
   mediaId: string,
-  inputPath: string
+  inputPath: string,
+  onProgress?: (p: { percent: number; fps?: number; speed?: number }) => void
 ): Promise<CompressResult> {
   const outputPath = compressedPathFor(mediaId, ".mp4");
   const probe = await probeVideo(inputPath);
@@ -76,6 +77,22 @@ export async function compressVideo(
         "-b:a 128k",
       ])
       .format("mp4")
+      .on("progress", (info) => {
+        let percent = typeof info.percent === "number" ? info.percent : 0;
+        if ((!percent || isNaN(percent)) && probe.duration && info.timemark) {
+          const [h, m, s] = info.timemark.split(":").map(Number);
+          const sec = (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+          percent = Math.min(100, (sec / probe.duration) * 100);
+        }
+        onProgress?.({
+          percent: Math.max(0, Math.min(100, percent || 0)),
+          fps: typeof info.currentFps === "number" ? info.currentFps : undefined,
+          speed:
+            typeof (info as { currentKbps?: number }).currentKbps === "number"
+              ? (info as { currentKbps: number }).currentKbps
+              : undefined,
+        });
+      })
       .on("end", () => resolve())
       .on("error", (err) => reject(err))
       .save(outputPath);
@@ -98,16 +115,30 @@ export async function processMedia(mediaId: number): Promise<void> {
     | undefined;
   if (!media) return;
 
-  db.prepare("UPDATE media SET status = 'processing' WHERE id = ?").run(
-    mediaId
-  );
+  db.prepare(
+    "UPDATE media SET status = 'processing', progress = 0 WHERE id = ?"
+  ).run(mediaId);
 
   try {
     const publicId = path.parse(media.original_path).name;
+    const updateProgress = db.prepare(
+      "UPDATE media SET progress = ?, progress_fps = ?, progress_speed = ? WHERE id = ?"
+    );
+    let lastWrite = 0;
     const result =
       media.kind === "image"
         ? await compressImage(publicId, media.original_path)
-        : await compressVideo(publicId, media.original_path);
+        : await compressVideo(publicId, media.original_path, (p) => {
+            const now = Date.now();
+            if (now - lastWrite < 250 && p.percent < 99) return;
+            lastWrite = now;
+            updateProgress.run(
+              p.percent,
+              p.fps ?? null,
+              p.speed ?? null,
+              mediaId
+            );
+          });
 
     db.prepare(
       `UPDATE media SET status = 'ready', compressed_path = ?, compressed_size = ?,

@@ -55,6 +55,9 @@ function migrate(db: Database.Database) {
       height INTEGER,
       duration_seconds REAL,
       status TEXT NOT NULL DEFAULT 'pending',
+      progress REAL NOT NULL DEFAULT 0,
+      progress_fps REAL,
+      progress_speed REAL,
       error TEXT,
       created_at INTEGER NOT NULL
     );
@@ -74,7 +77,36 @@ function migrate(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_posts_status_scheduled ON posts(status, scheduled_at);
     CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id);
+
+    CREATE TABLE IF NOT EXISTS post_insights (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      views INTEGER NOT NULL DEFAULT 0,
+      likes INTEGER NOT NULL DEFAULT 0,
+      comments INTEGER NOT NULL DEFAULT 0,
+      shares INTEGER NOT NULL DEFAULT 0,
+      saves INTEGER NOT NULL DEFAULT 0,
+      reach INTEGER NOT NULL DEFAULT 0,
+      raw_json TEXT,
+      fetched_at INTEGER NOT NULL,
+      UNIQUE(post_id, platform)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_insights_post ON post_insights(post_id);
   `);
+
+  const mediaCols = db.prepare("PRAGMA table_info(media)").all() as Array<{
+    name: string;
+  }>;
+  const names = new Set(mediaCols.map((c) => c.name));
+  if (!names.has("progress"))
+    db.exec("ALTER TABLE media ADD COLUMN progress REAL NOT NULL DEFAULT 0");
+  if (!names.has("progress_fps"))
+    db.exec("ALTER TABLE media ADD COLUMN progress_fps REAL");
+  if (!names.has("progress_speed"))
+    db.exec("ALTER TABLE media ADD COLUMN progress_speed REAL");
 }
 
 export type User = {
@@ -111,8 +143,26 @@ export type Media = {
   height: number | null;
   duration_seconds: number | null;
   status: "pending" | "processing" | "ready" | "failed";
+  progress: number;
+  progress_fps: number | null;
+  progress_speed: number | null;
   error: string | null;
   created_at: number;
+};
+
+export type PostInsight = {
+  id: number;
+  post_id: number;
+  platform: "tiktok" | "instagram" | "facebook";
+  external_id: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  reach: number;
+  raw_json: string | null;
+  fetched_at: number;
 };
 
 export type Post = {

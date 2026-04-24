@@ -2,6 +2,7 @@ import { getDb, Post, Media, SocialAccount } from "../db";
 import { publishInstagram, publishFacebook } from "./meta";
 import { publishTikTok } from "./tiktok";
 import { Platform, PublishInput, PublishResult } from "./types";
+import { refreshPostInsights } from "./insights";
 
 export async function publishToPlatform(
   platform: Platform,
@@ -83,4 +84,10 @@ export async function publishPost(postId: number): Promise<void> {
     Date.now(),
     postId
   );
+
+  if (allOk) {
+    setTimeout(() => {
+      refreshPostInsights(postId).catch(() => {});
+    }, 5000);
+  }
 }

@@ -10,6 +10,10 @@ type MediaInfo = {
   filename?: string;
   original_size?: number;
   compressed_size?: number;
+  progress?: number;
+  progress_fps?: number | null;
+  progress_speed?: number | null;
+  duration_seconds?: number | null;
   error?: string | null;
 };
 
@@ -60,7 +64,7 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
           if (pollRef.current) window.clearInterval(pollRef.current);
         }
       }
-    }, 1500);
+    }, 500);
   }
 
   function toggleAccount(id: number) {
@@ -145,24 +149,7 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
         {uploading && (
           <p className="text-xs text-neutral-500 mt-2">Lade hoch…</p>
         )}
-        {media && (
-          <div className="mt-3 text-xs space-y-1">
-            <div>
-              Status: <span className="font-mono">{media.status}</span>
-            </div>
-            {media.status === "ready" && media.original_size && media.compressed_size && (
-              <div className="text-neutral-400">
-                {(media.original_size / 1024 / 1024).toFixed(2)} MB →{" "}
-                {(media.compressed_size / 1024 / 1024).toFixed(2)} MB (
-                {Math.round(
-                  (1 - media.compressed_size / media.original_size) * 100
-                )}
-                % kleiner)
-              </div>
-            )}
-            {media.error && <div className="text-red-400">{media.error}</div>}
-          </div>
-        )}
+        {media && <CompressionStatus media={media} />}
       </div>
 
       <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 space-y-4">
@@ -243,6 +230,146 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
             : "Jetzt posten"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function CompressionStatus({ media }: { media: MediaInfo }) {
+  const pct = Math.max(0, Math.min(100, media.progress ?? 0));
+  const isProcessing = media.status === "processing";
+  const isPending = media.status === "pending";
+  const isReady = media.status === "ready";
+  const isFailed = media.status === "failed";
+
+  const savedPct =
+    media.original_size && media.compressed_size
+      ? Math.round((1 - media.compressed_size / media.original_size) * 100)
+      : null;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <StatusDot status={media.status} />
+          <span className="font-mono uppercase tracking-wide text-neutral-400">
+            {isPending && "warte auf FFmpeg…"}
+            {isProcessing && "komprimiere…"}
+            {isReady && "fertig komprimiert"}
+            {isFailed && "fehlgeschlagen"}
+          </span>
+        </div>
+        <span className="font-mono text-neutral-300">
+          {isReady ? "100%" : isProcessing ? `${pct.toFixed(1)}%` : "—"}
+        </span>
+      </div>
+
+      <div className="h-2 w-full rounded-full bg-neutral-800 overflow-hidden relative">
+        <div
+          className={
+            "h-full transition-all duration-300 ease-out rounded-full " +
+            (isFailed
+              ? "bg-red-500"
+              : isReady
+              ? "bg-green-500"
+              : "bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500")
+          }
+          style={{
+            width: isReady ? "100%" : `${Math.max(pct, isProcessing ? 2 : 0)}%`,
+          }}
+        />
+        {(isPending || isProcessing) && (
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent shimmer-slide" />
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <Metric
+          label="fps"
+          value={
+            isProcessing && media.progress_fps
+              ? media.progress_fps.toFixed(0)
+              : "—"
+          }
+        />
+        <Metric
+          label="bitrate"
+          value={
+            isProcessing && media.progress_speed
+              ? `${(media.progress_speed / 1000).toFixed(1)} Mbps`
+              : "—"
+          }
+        />
+        <Metric
+          label="dauer"
+          value={
+            media.duration_seconds
+              ? `${media.duration_seconds.toFixed(1)}s`
+              : "—"
+          }
+        />
+      </div>
+
+      {isReady &&
+        media.original_size != null &&
+        media.compressed_size != null && (
+          <div className="rounded-md bg-green-900/20 border border-green-900/40 p-3 text-xs">
+            <div className="flex items-baseline justify-between">
+              <span className="text-green-300 font-medium">
+                {(media.original_size / 1024 / 1024).toFixed(2)} MB →{" "}
+                {(media.compressed_size / 1024 / 1024).toFixed(2)} MB
+              </span>
+              {savedPct !== null && savedPct > 0 && (
+                <span className="font-mono text-green-400">
+                  −{savedPct}%
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+      {media.error && (
+        <div className="rounded-md bg-red-900/20 border border-red-900/40 p-3 text-xs text-red-300">
+          {media.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const color =
+    status === "ready"
+      ? "bg-green-400"
+      : status === "failed"
+      ? "bg-red-400"
+      : "bg-cyan-400";
+  const pulse = status === "processing" || status === "pending";
+  return (
+    <span className="relative inline-flex h-2 w-2">
+      {pulse && (
+        <span
+          className={
+            "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping " +
+            color
+          }
+        />
+      )}
+      <span
+        className={
+          "relative inline-flex rounded-full h-2 w-2 " + color
+        }
+      />
+    </span>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-neutral-800/60 border border-neutral-800 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-neutral-500">
+        {label}
+      </div>
+      <div className="font-mono text-sm text-neutral-200 mt-0.5">{value}</div>
     </div>
   );
 }

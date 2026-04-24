@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { getDb, Post } from "./db";
 import { publishPost } from "./social";
+import { refreshPostInsights } from "./social/insights";
 
 let started = false;
 
@@ -33,5 +34,23 @@ export function startScheduler() {
     }
   });
 
-  console.log("[scheduler] started — polling every minute");
+  cron.schedule("*/15 * * * *", async () => {
+    const db = getDb();
+    const posts = db
+      .prepare(
+        "SELECT id FROM posts WHERE status = 'published' ORDER BY created_at DESC LIMIT 50"
+      )
+      .all() as Pick<Post, "id">[];
+    for (const p of posts) {
+      try {
+        await refreshPostInsights(p.id);
+      } catch {
+        // continue
+      }
+    }
+  });
+
+  console.log(
+    "[scheduler] started — publish every 1min, insights every 15min"
+  );
 }

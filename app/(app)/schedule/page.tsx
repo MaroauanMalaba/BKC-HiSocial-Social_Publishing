@@ -1,9 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 import { getDb, Post } from "@/lib/db";
 import { format } from "date-fns";
 
 export default async function SchedulePage() {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const db = getDb();
   const posts = db
     .prepare(

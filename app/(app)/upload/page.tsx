@@ -1,9 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 import { getDb, SocialAccount } from "@/lib/db";
 import { UploadComposer } from "./upload-composer";
 
 export default async function UploadPage() {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const db = getDb();
   const accounts = db
     .prepare(
