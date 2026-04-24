@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { LoginForm } from "./login-form";
 
 export default async function LoginPage({
   searchParams,
@@ -20,12 +21,12 @@ export default async function LoginPage({
           </div>
           <h1 className="mt-2 text-3xl font-semibold">Social Publishing</h1>
           <p className="text-neutral-400 mt-2 text-sm">
-            Ein Klick — alle deine Facebook Pages und Instagram Business
-            Accounts werden automatisch verknüpft.
+            Intern. Für das Team.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-4">
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-5">
+          {/* Facebook OAuth — verknüpft automatisch Pages + IG */}
           <a
             href="/api/oauth/meta/start"
             className="flex items-center justify-center gap-3 rounded-lg bg-[#1877F2] hover:bg-[#1464cf] text-white font-medium px-5 py-3 transition"
@@ -41,16 +42,17 @@ export default async function LoginPage({
             Mit Facebook einloggen
           </a>
 
-          <div className="text-xs text-neutral-500 space-y-1">
-            <p>
-              Verbindet in einem Schritt: Login + alle Facebook Pages + alle
-              verknüpften Instagram Business Accounts.
-            </p>
-            <p className="text-neutral-600">
-              Dein Instagram-Konto muss ein Business- oder Creator-Profil sein,
-              verknüpft mit einer Facebook Page.
-            </p>
+          <div className="text-xs text-neutral-600 text-center">
+            Verbindet in einem Schritt: Login + alle Facebook Pages + verknüpfte Instagram Business Accounts.
           </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border-t border-neutral-800" />
+            <span className="text-xs text-neutral-600">oder direkt</span>
+            <div className="flex-1 border-t border-neutral-800" />
+          </div>
+
+          <LoginForm />
 
           {error && (
             <div className="rounded-md bg-red-900/20 border border-red-900/40 p-3 text-xs text-red-300">
