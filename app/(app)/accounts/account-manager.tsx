@@ -11,58 +11,17 @@ type Account = {
   created_at: number;
 };
 
-const PLATFORM_HELP: Record<string, string> = {
-  instagram:
-    "External ID = Instagram Business Account ID. Token = Long-Lived Page Access Token.",
-  facebook:
-    "External ID = Facebook Page ID. Token = Page Access Token (long-lived).",
-  tiktok:
-    "External ID = (optional) TikTok open_id. Token = TikTok user access_token mit video.publish scope.",
-};
-
 export function AccountManager({
   initialAccounts,
 }: {
   initialAccounts: Account[];
 }) {
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
-  const [platform, setPlatform] = useState("instagram");
-  const [label, setLabel] = useState("");
-  const [externalId, setExternalId] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
     const res = await fetch("/api/accounts");
     const json = await res.json();
     setAccounts(json.accounts);
-  }
-
-  async function addAccount(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    const res = await fetch("/api/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        platform,
-        account_label: label,
-        external_id: externalId || undefined,
-        access_token: accessToken,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setError(json.error || "Save failed");
-      return;
-    }
-    setLabel("");
-    setExternalId("");
-    setAccessToken("");
-    await refresh();
   }
 
   async function remove(id: number) {
@@ -71,77 +30,67 @@ export function AccountManager({
     await refresh();
   }
 
+  const byPlatform = {
+    instagram: accounts.filter((a) => a.platform === "instagram"),
+    facebook: accounts.filter((a) => a.platform === "facebook"),
+    tiktok: accounts.filter((a) => a.platform === "tiktok"),
+  };
+
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={addAccount}
-        className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 space-y-4"
-      >
-        <h2 className="font-medium">Account hinzufügen</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-neutral-400 mb-1">
-              Plattform
-            </label>
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-              className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700"
+      <div className="grid grid-cols-3 gap-4">
+        <ConnectCard
+          platform="instagram"
+          title="Instagram"
+          color="from-pink-500/30 to-orange-500/20 border-pink-900/40"
+          count={byPlatform.instagram.length}
+          description="via Facebook verknüpft"
+          action={
+            <a
+              href="/api/oauth/meta/start"
+              className="rounded-md bg-[#1877F2] hover:bg-[#1464cf] px-3 py-2 text-xs font-medium text-white text-center"
             >
-              <option value="instagram">Instagram</option>
-              <option value="facebook">Facebook</option>
-              <option value="tiktok">TikTok</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-neutral-400 mb-1">
-              Label (intern)
-            </label>
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              required
-              placeholder="z.B. @bkc_main"
-              className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm text-neutral-400 mb-1">
-            External ID
-          </label>
-          <input
-            value={externalId}
-            onChange={(e) => setExternalId(e.target.value)}
-            className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-neutral-400 mb-1">
-            Access Token
-          </label>
-          <textarea
-            value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
-            required
-            rows={2}
-            className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700 font-mono text-xs"
-          />
-        </div>
-        <p className="text-xs text-neutral-500">{PLATFORM_HELP[platform]}</p>
-        {error && (
-          <div className="text-sm text-red-400 bg-red-900/20 rounded-md p-2">
-            {error}
-          </div>
-        )}
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-white text-neutral-900 font-medium px-4 py-2 text-sm hover:bg-neutral-200 disabled:opacity-50"
-        >
-          {saving ? "Speichere…" : "Account speichern"}
-        </button>
-      </form>
+              {byPlatform.instagram.length > 0
+                ? "Neu verknüpfen"
+                : "Mit Facebook verbinden"}
+            </a>
+          }
+        />
+        <ConnectCard
+          platform="facebook"
+          title="Facebook Pages"
+          color="from-blue-500/30 to-indigo-500/20 border-blue-900/40"
+          count={byPlatform.facebook.length}
+          description="Facebook Pages"
+          action={
+            <a
+              href="/api/oauth/meta/start"
+              className="rounded-md bg-[#1877F2] hover:bg-[#1464cf] px-3 py-2 text-xs font-medium text-white text-center"
+            >
+              {byPlatform.facebook.length > 0
+                ? "Neu verknüpfen"
+                : "Mit Facebook verbinden"}
+            </a>
+          }
+        />
+        <ConnectCard
+          platform="tiktok"
+          title="TikTok"
+          color="from-neutral-700/40 to-neutral-800/20 border-neutral-700"
+          count={byPlatform.tiktok.length}
+          description="TikTok Accounts"
+          action={
+            <a
+              href="/api/oauth/tiktok/start"
+              className="rounded-md bg-black border border-neutral-700 hover:border-neutral-500 px-3 py-2 text-xs font-medium text-white text-center"
+            >
+              {byPlatform.tiktok.length > 0
+                ? "Weiteren verbinden"
+                : "TikTok verbinden"}
+            </a>
+          }
+        />
+      </div>
 
       <div className="rounded-xl border border-neutral-800 overflow-hidden">
         <table className="min-w-full text-sm">
@@ -149,7 +98,8 @@ export function AccountManager({
             <tr>
               <Th>Plattform</Th>
               <Th>Label</Th>
-              <Th>External ID</Th>
+              <Th>Externe ID</Th>
+              <Th>Token läuft ab</Th>
               <Th>Erstellt</Th>
               <Th> </Th>
             </tr>
@@ -157,13 +107,20 @@ export function AccountManager({
           <tbody>
             {accounts.map((a) => (
               <tr key={a.id} className="border-t border-neutral-800">
-                <Td>{a.platform}</Td>
+                <Td>
+                  <PlatformBadge platform={a.platform} />
+                </Td>
                 <Td>{a.account_label}</Td>
                 <Td className="font-mono text-xs">
                   {a.external_id || <span className="text-neutral-500">—</span>}
                 </Td>
                 <Td className="text-xs text-neutral-400">
-                  {new Date(a.created_at).toLocaleString("de-AT")}
+                  {a.token_expires_at
+                    ? new Date(a.token_expires_at).toLocaleDateString("de-AT")
+                    : <span className="text-neutral-500">—</span>}
+                </Td>
+                <Td className="text-xs text-neutral-400">
+                  {new Date(a.created_at).toLocaleDateString("de-AT")}
                 </Td>
                 <Td>
                   <button
@@ -177,8 +134,8 @@ export function AccountManager({
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-neutral-500">
-                  Keine Accounts verbunden.
+                <td colSpan={6} className="p-6 text-center text-neutral-500">
+                  Noch keine Accounts verbunden.
                 </td>
               </tr>
             )}
@@ -186,6 +143,58 @@ export function AccountManager({
         </table>
       </div>
     </div>
+  );
+}
+
+function ConnectCard({
+  title,
+  count,
+  description,
+  color,
+  action,
+}: {
+  platform: string;
+  title: string;
+  count: number;
+  description: string;
+  color: string;
+  action: React.ReactNode;
+}) {
+  return (
+    <div
+      className={
+        "rounded-xl border bg-gradient-to-br p-5 flex flex-col gap-4 " + color
+      }
+    >
+      <div>
+        <div className="text-xs uppercase tracking-widest text-white/60">
+          {title}
+        </div>
+        <div className="mt-2 text-3xl font-semibold tabular-nums text-white">
+          {count}
+        </div>
+        <div className="text-xs text-white/60">{description}</div>
+      </div>
+      <div className="mt-auto">{action}</div>
+    </div>
+  );
+}
+
+function PlatformBadge({ platform }: { platform: string }) {
+  const styles: Record<string, string> = {
+    instagram: "bg-pink-900/30 text-pink-300 border-pink-900/60",
+    facebook: "bg-blue-900/30 text-blue-300 border-blue-900/60",
+    tiktok: "bg-neutral-800 text-neutral-300 border-neutral-700",
+  };
+  return (
+    <span
+      className={
+        "text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 border " +
+        (styles[platform] || "bg-neutral-800 text-neutral-400")
+      }
+    >
+      {platform}
+    </span>
   );
 }
 

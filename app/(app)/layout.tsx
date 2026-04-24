@@ -28,9 +28,27 @@ export default async function AppLayout({
           <NavLink href="/accounts" label="Accounts" />
         </nav>
 
-        <div className="mt-auto space-y-2">
-          <div className="text-xs text-neutral-500">
-            {user.name || user.email}
+        <div className="mt-auto">
+          <div className="flex items-center gap-3 rounded-lg bg-neutral-900/60 border border-neutral-800 p-2 mb-2">
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt=""
+                className="h-9 w-9 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-9 w-9 rounded-full bg-neutral-700 flex items-center justify-center text-xs">
+                {(user.name || user.email || "?").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm truncate">
+                {user.name || user.email}
+              </div>
+              <div className="text-[10px] text-neutral-500 uppercase">
+                {user.auth_provider === "meta" ? "via Facebook" : "lokal"}
+              </div>
+            </div>
           </div>
           <LogoutButton />
         </div>

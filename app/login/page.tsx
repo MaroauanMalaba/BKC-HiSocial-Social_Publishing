@@ -1,86 +1,64 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const user = await getCurrentUser();
+  if (user) redirect("/dashboard");
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error || "Login failed");
-        return;
-      }
-      router.push("/dashboard");
-      router.refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { error } = await searchParams;
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6"
-      >
-        <h1 className="text-xl font-semibold">HiSocial Login</h1>
-        <div>
-          <label className="block text-sm text-neutral-400 mb-1">E-Mail</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700 focus:ring-neutral-500"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-neutral-400 mb-1">
-            Passwort
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md bg-neutral-800 px-3 py-2 text-sm outline-none ring-1 ring-neutral-700 focus:ring-neutral-500"
-            required
-          />
-        </div>
-        {error && (
-          <div className="text-sm text-red-400 bg-red-900/20 rounded-md p-2">
-            {error}
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <div className="text-xs uppercase tracking-widest text-neutral-500">
+            BKC · HiSocial
           </div>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-white text-neutral-900 font-medium py-2 text-sm hover:bg-neutral-200 disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "Login"}
-        </button>
-        <p className="text-xs text-neutral-500 text-center">
-          Noch kein Account?{" "}
-          <Link href="/register" className="text-neutral-300 underline">
-            Registrieren
-          </Link>
-        </p>
-      </form>
+          <h1 className="mt-2 text-3xl font-semibold">Social Publishing</h1>
+          <p className="text-neutral-400 mt-2 text-sm">
+            Ein Klick — alle deine Facebook Pages und Instagram Business
+            Accounts werden automatisch verknüpft.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-4">
+          <a
+            href="/api/oauth/meta/start"
+            className="flex items-center justify-center gap-3 rounded-lg bg-[#1877F2] hover:bg-[#1464cf] text-white font-medium px-5 py-3 transition"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-5 w-5"
+            >
+              <path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24h11.495v-9.294H9.691v-3.622h3.129V8.413c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.794.143v3.24h-1.917c-1.504 0-1.796.715-1.796 1.763v2.313h3.587l-.467 3.622h-3.12V24h6.116c.73 0 1.323-.593 1.323-1.325V1.325C24 .593 23.407 0 22.675 0z" />
+            </svg>
+            Mit Facebook einloggen
+          </a>
+
+          <div className="text-xs text-neutral-500 space-y-1">
+            <p>
+              Verbindet in einem Schritt: Login + alle Facebook Pages + alle
+              verknüpften Instagram Business Accounts.
+            </p>
+            <p className="text-neutral-600">
+              Dein Instagram-Konto muss ein Business- oder Creator-Profil sein,
+              verknüpft mit einer Facebook Page.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-md bg-red-900/20 border border-red-900/40 p-3 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

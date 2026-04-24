@@ -22,9 +22,12 @@ function migrate(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
+      email TEXT UNIQUE,
+      password_hash TEXT,
       name TEXT,
+      auth_provider TEXT NOT NULL DEFAULT 'password',
+      provider_user_id TEXT,
+      avatar_url TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -107,13 +110,29 @@ function migrate(db: Database.Database) {
     db.exec("ALTER TABLE media ADD COLUMN progress_fps REAL");
   if (!names.has("progress_speed"))
     db.exec("ALTER TABLE media ADD COLUMN progress_speed REAL");
+
+  const userCols = db.prepare("PRAGMA table_info(users)").all() as Array<{
+    name: string;
+  }>;
+  const userNames = new Set(userCols.map((c) => c.name));
+  if (!userNames.has("auth_provider"))
+    db.exec(
+      "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'"
+    );
+  if (!userNames.has("provider_user_id"))
+    db.exec("ALTER TABLE users ADD COLUMN provider_user_id TEXT");
+  if (!userNames.has("avatar_url"))
+    db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
 }
 
 export type User = {
   id: number;
-  email: string;
-  password_hash: string;
+  email: string | null;
+  password_hash: string | null;
   name: string | null;
+  auth_provider: "password" | "meta";
+  provider_user_id: string | null;
+  avatar_url: string | null;
   created_at: number;
 };
 

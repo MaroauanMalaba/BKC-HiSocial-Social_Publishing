@@ -90,3 +90,42 @@ export function findUserByEmail(email: string): User | null {
     .get(email.toLowerCase().trim()) as User | undefined;
   return user || null;
 }
+
+export function upsertOAuthUser(params: {
+  provider: "meta";
+  providerUserId: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+}): User {
+  const db = getDb();
+  const existing = db
+    .prepare(
+      "SELECT * FROM users WHERE auth_provider = ? AND provider_user_id = ?"
+    )
+    .get(params.provider, params.providerUserId) as User | undefined;
+  if (existing) {
+    db.prepare(
+      "UPDATE users SET name = COALESCE(?, name), avatar_url = COALESCE(?, avatar_url), email = COALESCE(?, email) WHERE id = ?"
+    ).run(params.name, params.avatarUrl, params.email, existing.id);
+    return db.prepare("SELECT * FROM users WHERE id = ?").get(existing.id) as User;
+  }
+
+  const now = Date.now();
+  const info = db
+    .prepare(
+      `INSERT INTO users (email, password_hash, name, auth_provider, provider_user_id, avatar_url, created_at)
+       VALUES (?, NULL, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      params.email?.toLowerCase().trim() ?? null,
+      params.name,
+      params.provider,
+      params.providerUserId,
+      params.avatarUrl,
+      now
+    );
+  return db
+    .prepare("SELECT * FROM users WHERE id = ?")
+    .get(info.lastInsertRowid) as User;
+}
