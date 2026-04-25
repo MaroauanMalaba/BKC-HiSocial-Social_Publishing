@@ -13,11 +13,18 @@ export function AccountManager({ initialPlatforms }: { initialPlatforms: Platfor
 
   async function openConnectFlow() {
     setLoading(true);
-    const res = await fetch("/api/ayrshare/connect");
-    const json = await res.json();
-    setLoading(false);
-    if (json.url) {
-      window.open(json.url, "_blank", "width=600,height=700");
+    try {
+      const res = await fetch("/api/ayrshare/connect");
+      const json = await res.json();
+      setLoading(false);
+      if (json.url) {
+        window.open(json.url, "_blank", "width=600,height=700");
+      } else {
+        alert(json.error || "Fehler beim Öffnen des Connect-Fensters");
+      }
+    } catch (e) {
+      setLoading(false);
+      alert("Netzwerkfehler: " + String(e));
     }
   }
 

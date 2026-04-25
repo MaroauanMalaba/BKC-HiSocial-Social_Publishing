@@ -1,4 +1,4 @@
-const BASE = "https://app.ayrshare.com/api";
+const BASE = "https://api.ayrshare.com/api";
 const API_KEY = process.env.AYRSHARE_API_KEY!;
 
 function headers(profileKey?: string) {
@@ -90,8 +90,10 @@ export async function getPostAnalytics(
   platform: string,
   postId: string
 ): Promise<AyrshareAnalytics> {
-  const res = await fetch(`${BASE}/analytics/post/${postId}?platforms=${platform}`, {
+  const res = await fetch(`${BASE}/analytics/post`, {
+    method: "POST",
     headers: headers(profileKey),
+    body: JSON.stringify({ id: postId, platforms: [platform] }),
   });
   const json = await res.json();
   const d = json?.[platform] ?? {};
