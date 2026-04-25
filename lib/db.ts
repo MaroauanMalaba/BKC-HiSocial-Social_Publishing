@@ -123,6 +123,8 @@ function migrate(db: Database.Database) {
     db.exec("ALTER TABLE users ADD COLUMN provider_user_id TEXT");
   if (!userNames.has("avatar_url"))
     db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
+  if (!userNames.has("ayrshare_profile_key"))
+    db.exec("ALTER TABLE users ADD COLUMN ayrshare_profile_key TEXT");
 }
 
 export type User = {
@@ -133,6 +135,7 @@ export type User = {
   auth_provider: "password" | "meta";
   provider_user_id: string | null;
   avatar_url: string | null;
+  ayrshare_profile_key: string | null;
   created_at: number;
 };
 

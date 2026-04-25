@@ -1,91 +1,60 @@
-import { getDb, Post, Media, SocialAccount } from "../db";
-import { publishInstagram, publishFacebook } from "./meta";
-import { publishTikTok } from "./tiktok";
-import { Platform, PublishInput, PublishResult } from "./types";
+import { getDb, Post, Media, User } from "../db";
+import { postContent } from "./ayrshare";
 import { refreshPostInsights } from "./insights";
-
-export async function publishToPlatform(
-  platform: Platform,
-  input: PublishInput
-): Promise<PublishResult> {
-  switch (platform) {
-    case "instagram":
-      return publishInstagram(input);
-    case "facebook":
-      return publishFacebook(input);
-    case "tiktok":
-      return publishTikTok(input);
-  }
-}
 
 export async function publishPost(postId: number): Promise<void> {
   const db = getDb();
-  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId) as
-    | Post
-    | undefined;
+  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId) as Post | undefined;
   if (!post) return;
 
-  db.prepare(
-    "UPDATE posts SET status = 'publishing', updated_at = ? WHERE id = ?"
-  ).run(Date.now(), postId);
+  db.prepare("UPDATE posts SET status = 'publishing', updated_at = ? WHERE id = ?").run(
+    Date.now(), postId
+  );
 
-  const media = db.prepare("SELECT * FROM media WHERE id = ?").get(
-    post.media_id
-  ) as Media | undefined;
+  const media = db.prepare("SELECT * FROM media WHERE id = ?").get(post.media_id) as Media | undefined;
   if (!media || !media.compressed_path) {
-    db.prepare(
-      "UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      JSON.stringify({ error: "media not ready" }),
-      Date.now(),
-      postId
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "media not ready" }), Date.now(), postId
     );
     return;
   }
 
-  const platforms = JSON.parse(post.platforms_json) as Array<{
-    platform: Platform;
-    account_id: number;
-  }>;
-
-  const results: PublishResult[] = [];
-  for (const p of platforms) {
-    const account = db
-      .prepare("SELECT * FROM social_accounts WHERE id = ?")
-      .get(p.account_id) as SocialAccount | undefined;
-    if (!account) {
-      results.push({
-        ok: false,
-        platform: p.platform,
-        error: "Account missing",
-      });
-      continue;
-    }
-    const result = await publishToPlatform(p.platform, {
-      mediaPath: media.compressed_path,
-      mediaKind: media.kind,
-      caption: post.caption,
-      account: {
-        id: account.id,
-        external_id: account.external_id,
-        access_token: account.access_token,
-        meta_json: account.meta_json,
-      },
-    });
-    results.push(result);
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(post.user_id) as User | undefined;
+  if (!user?.ayrshare_profile_key) {
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "No Ayrshare profile — connect social accounts first" }),
+      Date.now(), postId
+    );
+    return;
   }
 
-  const allOk = results.every((r) => r.ok);
-  db.prepare(
-    "UPDATE posts SET status = ?, results_json = ?, updated_at = ? WHERE id = ?"
-  ).run(
-    allOk ? "published" : "failed",
-    JSON.stringify(results),
+  const platforms = JSON.parse(post.platforms_json) as string[];
+
+  const publicBase = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
+  if (!publicBase) {
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "PUBLIC_BASE_URL not configured" }), Date.now(), postId
+    );
+    return;
+  }
+
+  const fileName = media.compressed_path.split("/").pop();
+  const mediaUrl = `${publicBase}/media/${fileName}`;
+
+  const result = await postContent(user.ayrshare_profile_key, {
+    post: post.caption,
+    platforms,
+    mediaUrls: [mediaUrl],
+  });
+
+  db.prepare("UPDATE posts SET status = ?, results_json = ?, updated_at = ? WHERE id = ?").run(
+    result.ok ? "published" : "failed",
+    JSON.stringify(result),
     Date.now(),
     postId
   );
 
-  if (allOk) {
+  if (result.ok) {
     setTimeout(() => {
       refreshPostInsights(postId).catch(() => {});
     }, 5000);

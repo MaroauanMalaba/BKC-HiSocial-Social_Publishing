@@ -2,216 +2,82 @@
 
 import { useState } from "react";
 
-type Account = {
-  id: number;
+type Platform = {
   platform: string;
-  account_label: string;
-  external_id: string | null;
-  token_expires_at: number | null;
-  created_at: number;
+  display_name?: string;
 };
 
-export function AccountManager({
-  initialAccounts,
-}: {
-  initialAccounts: Account[];
-}) {
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+export function AccountManager({ initialPlatforms }: { initialPlatforms: Platform[] }) {
+  const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms);
+  const [loading, setLoading] = useState(false);
+
+  async function openConnectFlow() {
+    setLoading(true);
+    const res = await fetch("/api/ayrshare/connect");
+    const json = await res.json();
+    setLoading(false);
+    if (json.url) {
+      window.open(json.url, "_blank", "width=600,height=700");
+    }
+  }
 
   async function refresh() {
-    const res = await fetch("/api/accounts");
+    const res = await fetch("/api/ayrshare/platforms");
     const json = await res.json();
-    setAccounts(json.accounts);
+    if (json.platforms) setPlatforms(json.platforms);
   }
 
-  async function remove(id: number) {
-    if (!confirm("Account wirklich entfernen?")) return;
-    await fetch("/api/accounts?id=" + id, { method: "DELETE" });
-    await refresh();
-  }
-
-  const byPlatform = {
-    instagram: accounts.filter((a) => a.platform === "instagram"),
-    facebook: accounts.filter((a) => a.platform === "facebook"),
-    tiktok: accounts.filter((a) => a.platform === "tiktok"),
-  };
+  const all = ["instagram", "facebook", "tiktok", "youtube", "linkedin", "twitter"];
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-6 flex items-center justify-between">
+        <div>
+          <div className="font-medium text-white">Social Accounts verbinden</div>
+          <div className="text-sm text-neutral-400 mt-1">
+            Verbinde Instagram, Facebook, TikTok und mehr — in einem Schritt.
+          </div>
+        </div>
+        <button
+          onClick={openConnectFlow}
+          disabled={loading}
+          className="rounded-lg bg-white text-neutral-900 font-medium px-4 py-2 text-sm hover:bg-neutral-100 transition disabled:opacity-50"
+        >
+          {loading ? "Lädt..." : platforms.length > 0 ? "Accounts verwalten" : "Accounts verbinden"}
+        </button>
+      </div>
+
       <div className="grid grid-cols-3 gap-4">
-        <ConnectCard
-          platform="instagram"
-          title="Instagram"
-          color="from-pink-500/30 to-orange-500/20 border-pink-900/40"
-          count={byPlatform.instagram.length}
-          description="via Facebook verknüpft"
-          action={
-            <a
-              href="/api/oauth/meta/start"
-              className="rounded-md bg-[#1877F2] hover:bg-[#1464cf] px-3 py-2 text-xs font-medium text-white text-center"
+        {all.map((p) => {
+          const connected = platforms.find((pl) => pl.platform === p);
+          return (
+            <div
+              key={p}
+              className={
+                "rounded-xl border p-5 flex flex-col gap-2 " +
+                (connected
+                  ? "border-green-900/40 bg-green-900/10"
+                  : "border-neutral-800 bg-neutral-900/20 opacity-50")
+              }
             >
-              {byPlatform.instagram.length > 0
-                ? "Neu verknüpfen"
-                : "Mit Facebook verbinden"}
-            </a>
-          }
-        />
-        <ConnectCard
-          platform="facebook"
-          title="Facebook Pages"
-          color="from-blue-500/30 to-indigo-500/20 border-blue-900/40"
-          count={byPlatform.facebook.length}
-          description="Facebook Pages"
-          action={
-            <a
-              href="/api/oauth/meta/start"
-              className="rounded-md bg-[#1877F2] hover:bg-[#1464cf] px-3 py-2 text-xs font-medium text-white text-center"
-            >
-              {byPlatform.facebook.length > 0
-                ? "Neu verknüpfen"
-                : "Mit Facebook verbinden"}
-            </a>
-          }
-        />
-        <ConnectCard
-          platform="tiktok"
-          title="TikTok"
-          color="from-neutral-700/40 to-neutral-800/20 border-neutral-700"
-          count={byPlatform.tiktok.length}
-          description="TikTok Accounts"
-          action={
-            <a
-              href="/api/oauth/tiktok/start"
-              className="rounded-md bg-black border border-neutral-700 hover:border-neutral-500 px-3 py-2 text-xs font-medium text-white text-center"
-            >
-              {byPlatform.tiktok.length > 0
-                ? "Weiteren verbinden"
-                : "TikTok verbinden"}
-            </a>
-          }
-        />
+              <div className="text-xs uppercase tracking-widest text-white/60">{p}</div>
+              <div className="text-sm font-medium text-white">
+                {connected ? (connected.display_name || "Verbunden") : "Nicht verbunden"}
+              </div>
+              <div className={"text-xs " + (connected ? "text-green-400" : "text-neutral-500")}>
+                {connected ? "✓ aktiv" : "—"}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="rounded-xl border border-neutral-800 overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead className="bg-neutral-900/60">
-            <tr>
-              <Th>Plattform</Th>
-              <Th>Label</Th>
-              <Th>Externe ID</Th>
-              <Th>Token läuft ab</Th>
-              <Th>Erstellt</Th>
-              <Th> </Th>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.map((a) => (
-              <tr key={a.id} className="border-t border-neutral-800">
-                <Td>
-                  <PlatformBadge platform={a.platform} />
-                </Td>
-                <Td>{a.account_label}</Td>
-                <Td className="font-mono text-xs">
-                  {a.external_id || <span className="text-neutral-500">—</span>}
-                </Td>
-                <Td className="text-xs text-neutral-400">
-                  {a.token_expires_at
-                    ? new Date(a.token_expires_at).toLocaleDateString("de-AT")
-                    : <span className="text-neutral-500">—</span>}
-                </Td>
-                <Td className="text-xs text-neutral-400">
-                  {new Date(a.created_at).toLocaleDateString("de-AT")}
-                </Td>
-                <Td>
-                  <button
-                    onClick={() => remove(a.id)}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    entfernen
-                  </button>
-                </Td>
-              </tr>
-            ))}
-            {accounts.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-neutral-500">
-                  Noch keine Accounts verbunden.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <button
+        onClick={refresh}
+        className="text-xs text-neutral-500 hover:text-neutral-300 transition"
+      >
+        Status aktualisieren
+      </button>
     </div>
   );
-}
-
-function ConnectCard({
-  title,
-  count,
-  description,
-  color,
-  action,
-}: {
-  platform: string;
-  title: string;
-  count: number;
-  description: string;
-  color: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div
-      className={
-        "rounded-xl border bg-gradient-to-br p-5 flex flex-col gap-4 " + color
-      }
-    >
-      <div>
-        <div className="text-xs uppercase tracking-widest text-white/60">
-          {title}
-        </div>
-        <div className="mt-2 text-3xl font-semibold tabular-nums text-white">
-          {count}
-        </div>
-        <div className="text-xs text-white/60">{description}</div>
-      </div>
-      <div className="mt-auto">{action}</div>
-    </div>
-  );
-}
-
-function PlatformBadge({ platform }: { platform: string }) {
-  const styles: Record<string, string> = {
-    instagram: "bg-pink-900/30 text-pink-300 border-pink-900/60",
-    facebook: "bg-blue-900/30 text-blue-300 border-blue-900/60",
-    tiktok: "bg-neutral-800 text-neutral-300 border-neutral-700",
-  };
-  return (
-    <span
-      className={
-        "text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 border " +
-        (styles[platform] || "bg-neutral-800 text-neutral-400")
-      }
-    >
-      {platform}
-    </span>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="text-left text-xs uppercase tracking-wide text-neutral-500 px-4 py-2">
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <td className={"px-4 py-2 " + className}>{children}</td>;
 }
