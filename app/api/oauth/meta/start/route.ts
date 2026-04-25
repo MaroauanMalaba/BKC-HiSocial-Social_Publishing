@@ -8,7 +8,6 @@ const SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
-  "instagram_basic",
   "instagram_content_publish",
   "business_management",
 ].join(",");
