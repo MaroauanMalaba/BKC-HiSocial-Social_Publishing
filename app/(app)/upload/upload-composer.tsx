@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 
-type Account = { id: number; platform: string; label: string };
+type PlatformOption = { platform: string; label: string };
 type MediaInfo = {
   id: number;
   status: string;
@@ -17,11 +17,11 @@ type MediaInfo = {
   error?: string | null;
 };
 
-export function UploadComposer({ accounts }: { accounts: Account[] }) {
+export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
   const [uploading, setUploading] = useState(false);
   const [media, setMedia] = useState<MediaInfo | null>(null);
   const [caption, setCaption] = useState("");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [schedule, setSchedule] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [result, setResult] = useState<string | null>(null);
@@ -67,30 +67,26 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
     }, 500);
   }
 
-  function toggleAccount(id: number) {
+  function togglePlatform(platform: string) {
     const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(platform)) next.delete(platform);
+    else next.add(platform);
     setSelected(next);
   }
 
   async function submitPost() {
     if (!media || media.status !== "ready") return;
     if (selected.size === 0) {
-      setError("Wähle mindestens einen Account");
+      setError("Wähle mindestens eine Plattform");
       return;
     }
     setPosting(true);
     setError(null);
-    const platforms = Array.from(selected).map((id) => {
-      const acc = accounts.find((a) => a.id === id)!;
-      return { account_id: acc.id, platform: acc.platform };
-    });
 
     const body: Record<string, unknown> = {
       media_id: media.id,
       caption,
-      platforms,
+      platforms: Array.from(selected),
     };
     if (schedule && scheduledAt) {
       body.scheduled_at = new Date(scheduledAt).getTime();
@@ -119,12 +115,12 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
     setScheduledAt("");
   }
 
-  if (accounts.length === 0) {
+  if (platforms.length === 0) {
     return (
       <div className="rounded-xl border border-yellow-900/50 bg-yellow-900/20 p-5 text-sm">
         Du hast noch keine Social Accounts verbunden.{" "}
         <a href="/accounts" className="underline">
-          Jetzt Account hinzufügen →
+          Jetzt verbinden →
         </a>
       </div>
     );
@@ -165,24 +161,24 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
         </div>
         <div>
           <label className="block text-sm font-medium mb-2">
-            Accounts auswählen
+            Plattformen auswählen
           </label>
           <div className="flex flex-wrap gap-2">
-            {accounts.map((a) => {
-              const active = selected.has(a.id);
+            {platforms.map((p) => {
+              const active = selected.has(p.platform);
               return (
                 <button
-                  key={a.id}
+                  key={p.platform}
                   type="button"
-                  onClick={() => toggleAccount(a.id)}
+                  onClick={() => togglePlatform(p.platform)}
                   className={
-                    "text-xs rounded-full px-3 py-1.5 border " +
+                    "text-xs rounded-full px-3 py-1.5 border transition " +
                     (active
                       ? "bg-white text-neutral-900 border-white"
                       : "bg-transparent text-neutral-300 border-neutral-700 hover:border-neutral-500")
                   }
                 >
-                  {a.platform} · {a.label}
+                  {p.platform} · {p.label}
                 </button>
               );
             })}
@@ -219,7 +215,7 @@ export function UploadComposer({ accounts }: { accounts: Account[] }) {
         <button
           onClick={submitPost}
           disabled={
-            !media || media.status !== "ready" || posting || selected.size === 0
+            !media || media.status !== "ready" || posting || selected.size === 0 || !caption.trim()
           }
           className="rounded-md bg-white text-neutral-900 font-medium px-4 py-2 text-sm hover:bg-neutral-200 disabled:opacity-50"
         >
