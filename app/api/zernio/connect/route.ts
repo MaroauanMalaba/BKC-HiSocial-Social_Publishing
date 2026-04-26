@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { createZernioProfile, getConnectUrl } from "@/lib/social/zernio";
+import { getOrCreateZernioProfile, getConnectUrl } from "@/lib/social/zernio";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -18,8 +18,7 @@ export async function GET(req: NextRequest) {
     let profileId = user.zernio_profile_id;
 
     if (!profileId) {
-      const profile = await createZernioProfile(user.name || user.email || `User ${user.id}`);
-      profileId = profile.id;
+      profileId = await getOrCreateZernioProfile(user.name || user.email || `User ${user.id}`);
       db.prepare("UPDATE users SET zernio_profile_id = ? WHERE id = ?").run(profileId, user.id);
     }
 

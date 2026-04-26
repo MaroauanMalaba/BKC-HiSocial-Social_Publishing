@@ -10,7 +10,7 @@ function headers(extra?: Record<string, string>) {
 }
 
 export type ZernioAccount = {
-  id: string;
+  _id: string;
   platform: string;
   name: string;
   username?: string;
@@ -19,21 +19,29 @@ export type ZernioAccount = {
 };
 
 export type ZernioProfile = {
-  id: string;
+  _id: string;
   name: string;
 };
 
 // --- Profiles ---
 
-export async function createZernioProfile(name: string): Promise<ZernioProfile> {
-  const res = await fetch(`${BASE}/profiles`, {
+export async function getOrCreateZernioProfile(name: string): Promise<string> {
+  // Try to create
+  const createRes = await fetch(`${BASE}/profiles`, {
     method: "POST",
     headers: headers(),
     body: JSON.stringify({ name }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || "Failed to create profile");
-  return json as ZernioProfile;
+  const createJson = await createRes.json();
+  if (createRes.ok && createJson._id) return createJson._id as string;
+
+  // At limit — reuse the first existing profile
+  const listRes = await fetch(`${BASE}/profiles`, { headers: headers() });
+  const listJson = await listRes.json();
+  const profiles = listJson.profiles as ZernioProfile[] | undefined;
+  if (profiles?.length) return profiles[0]._id;
+
+  throw new Error(createJson.message || "Failed to get Zernio profile");
 }
 
 // --- Account Connection ---
@@ -41,10 +49,10 @@ export async function createZernioProfile(name: string): Promise<ZernioProfile> 
 export async function getConnectUrl(
   platform: string,
   profileId: string,
-  callbackUrl: string
+  redirectUrl: string
 ): Promise<string> {
   const res = await fetch(
-    `${BASE}/connect/${platform}?profileId=${profileId}&redirectUrl=${encodeURIComponent(callbackUrl)}`,
+    `${BASE}/connect/${platform}?profileId=${encodeURIComponent(profileId)}&redirectUrl=${encodeURIComponent(redirectUrl)}`,
     { headers: headers() }
   );
   const json = await res.json();

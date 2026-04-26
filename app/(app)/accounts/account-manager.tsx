@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 type ZernioAccount = {
-  id: string;
+  _id: string;
   platform: string;
   name: string;
   username?: string;
@@ -69,7 +69,7 @@ export function AccountManager({ initialAccounts }: { initialAccounts: ZernioAcc
             </thead>
             <tbody>
               {accounts.map((a) => (
-                <tr key={a.id} className="border-t border-neutral-800">
+                <tr key={a._id} className="border-t border-neutral-800">
                   <Td><PlatformBadge platform={a.platform} /></Td>
                   <Td>{a.name}</Td>
                   <Td className="text-neutral-400">{a.username ? `@${a.username}` : "—"}</Td>
