@@ -1,93 +1,76 @@
-import { getDb, Post, Media, SocialAccount } from "../db";
-import { publishInstagram, publishFacebook } from "./meta";
-import { publishTikTok } from "./tiktok";
-import { Platform, PublishInput, PublishResult } from "./types";
+import path from "path";
+import { getDb, Post, Media, User } from "../db";
+import { uploadMediaToZernio, zernioPost, getConnectedAccounts } from "./zernio";
 import { refreshPostInsights } from "./insights";
-
-export async function publishToPlatform(
-  platform: Platform,
-  input: PublishInput
-): Promise<PublishResult> {
-  switch (platform) {
-    case "instagram":
-      return publishInstagram(input);
-    case "facebook":
-      return publishFacebook(input);
-    case "tiktok":
-      return publishTikTok(input);
-  }
-}
 
 export async function publishPost(postId: number): Promise<void> {
   const db = getDb();
-  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId) as
-    | Post
-    | undefined;
+  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId) as Post | undefined;
   if (!post) return;
 
-  db.prepare(
-    "UPDATE posts SET status = 'publishing', updated_at = ? WHERE id = ?"
-  ).run(Date.now(), postId);
+  db.prepare("UPDATE posts SET status = 'publishing', updated_at = ? WHERE id = ?").run(Date.now(), postId);
 
-  const media = db.prepare("SELECT * FROM media WHERE id = ?").get(
-    post.media_id
-  ) as Media | undefined;
+  const media = db.prepare("SELECT * FROM media WHERE id = ?").get(post.media_id) as Media | undefined;
   if (!media || !media.compressed_path) {
-    db.prepare(
-      "UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      JSON.stringify({ error: "media not ready" }),
-      Date.now(),
-      postId
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "media not ready" }), Date.now(), postId
     );
     return;
   }
 
-  const platforms = JSON.parse(post.platforms_json) as Array<{
-    platform: Platform;
-    account_id: number;
-  }>;
-
-  const results: PublishResult[] = [];
-  for (const p of platforms) {
-    const account = db
-      .prepare("SELECT * FROM social_accounts WHERE id = ?")
-      .get(p.account_id) as SocialAccount | undefined;
-    if (!account) {
-      results.push({
-        ok: false,
-        platform: p.platform,
-        error: "Account missing",
-      });
-      continue;
-    }
-    const result = await publishToPlatform(p.platform, {
-      mediaPath: media.compressed_path,
-      mediaKind: media.kind,
-      caption: post.caption,
-      account: {
-        id: account.id,
-        external_id: account.external_id,
-        access_token: account.access_token,
-        meta_json: account.meta_json,
-      },
-    });
-    results.push(result);
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(post.user_id) as User | undefined;
+  if (!user?.zernio_profile_id) {
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "Keine verbundenen Accounts — geh zu /accounts und verbinde zuerst eine Plattform." }),
+      Date.now(), postId
+    );
+    return;
   }
 
-  const allOk = results.every((r) => r.ok);
-  db.prepare(
-    "UPDATE posts SET status = ?, results_json = ?, updated_at = ? WHERE id = ?"
-  ).run(
-    allOk ? "published" : "failed",
-    JSON.stringify(results),
+  // Upload media to Zernio CDN
+  const filename = path.basename(media.compressed_path);
+  const contentType = media.kind === "video" ? "video/mp4" : "image/jpeg";
+  let mediaUrl: string;
+  try {
+    mediaUrl = await uploadMediaToZernio(media.compressed_path, filename, contentType);
+  } catch (e) {
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: `Media upload fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}` }),
+      Date.now(), postId
+    );
+    return;
+  }
+
+  // Get connected accounts for requested platforms
+  const platforms = JSON.parse(post.platforms_json) as string[];
+  const allAccounts = await getConnectedAccounts(user.zernio_profile_id);
+  const targetAccounts = allAccounts
+    .filter((a) => platforms.includes(a.platform) && !a.disconnected)
+    .map((a) => ({ platform: a.platform, accountId: a._id }));
+
+  if (!targetAccounts.length) {
+    db.prepare("UPDATE posts SET status = 'failed', results_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify({ error: "Keine passenden verbundenen Accounts für die gewählten Plattformen." }),
+      Date.now(), postId
+    );
+    return;
+  }
+
+  const result = await zernioPost({
+    profileId: user.zernio_profile_id,
+    content: post.caption,
+    platforms: targetAccounts,
+    mediaUrls: [mediaUrl],
+  });
+
+  db.prepare("UPDATE posts SET status = ?, results_json = ?, updated_at = ? WHERE id = ?").run(
+    result.ok ? "published" : "failed",
+    JSON.stringify(result),
     Date.now(),
     postId
   );
 
-  if (allOk) {
-    setTimeout(() => {
-      refreshPostInsights(postId).catch(() => {});
-    }, 5000);
+  if (result.ok) {
+    setTimeout(() => refreshPostInsights(postId).catch(() => {}), 5000);
   }
 }

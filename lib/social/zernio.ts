@@ -69,6 +69,38 @@ export async function getConnectedAccounts(profileId: string): Promise<ZernioAcc
   return (json.accounts ?? json ?? []) as ZernioAccount[];
 }
 
+// --- Media Upload ---
+
+export async function uploadMediaToZernio(
+  filePath: string,
+  filename: string,
+  contentType: string
+): Promise<string> {
+  const fs = await import("fs");
+
+  // Step 1: get presigned URL
+  const presignRes = await fetch(`${BASE}/media/presign`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ filename, contentType }),
+  });
+  const presignJson = await presignRes.json();
+  if (!presignRes.ok || !presignJson.uploadUrl)
+    throw new Error(presignJson.message || "Failed to get upload URL");
+
+  // Step 2: upload file directly to Cloudflare R2
+  const fileBuffer = fs.readFileSync(filePath);
+  const uploadRes = await fetch(presignJson.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: fileBuffer,
+  });
+  if (!uploadRes.ok)
+    throw new Error(`Media upload failed: ${uploadRes.status}`);
+
+  return presignJson.publicUrl as string;
+}
+
 // --- Posting ---
 
 export type ZernioPostOptions = {
