@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getConnectedAccounts } from "@/lib/social/zernio";
+import { Icon } from "@/components/ui/icons";
 import { UploadComposer } from "./upload-composer";
 
 export default async function UploadPage() {
@@ -19,14 +21,23 @@ export default async function UploadPage() {
     }));
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Upload & Post</h1>
-        <p className="text-neutral-400 mt-1 text-sm">
-          Bild oder Video hochladen → automatisch komprimieren → jetzt posten oder schedulen.
-        </p>
+    <div style={{ padding: "20px 28px 40px", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div>
+          <div className="h-eyebrow" style={{ marginBottom: 6 }}>Composer · Multi-Channel Publishing</div>
+          <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.035em", margin: 0, color: "var(--text-1)" }}>
+            Neuer Post
+          </h1>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Link href="/schedule" className="hs-btn hs-btn-glass">
+            <Icon name="clock" size={14}/>Geplante Posts
+          </Link>
+        </div>
       </div>
-      <UploadComposer platforms={platforms} />
+
+      <UploadComposer platforms={platforms} userName={user.name || user.email || ""}/>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import cron from "node-cron";
-import { getDb, Post } from "./db";
 import { publishPost } from "./social";
-import { refreshPostInsights } from "./social/insights";
+import { refreshPostInsights, refreshAccountInsights } from "./social/insights";
+import { getDb, Post, User } from "./db";
 
 let started = false;
 
@@ -42,11 +42,13 @@ export function startScheduler() {
       )
       .all() as Pick<Post, "id">[];
     for (const p of posts) {
-      try {
-        await refreshPostInsights(p.id);
-      } catch {
-        // continue
-      }
+      try { await refreshPostInsights(p.id); } catch { /* continue */ }
+    }
+
+    // Refresh account-level insights for all users with a Zernio profile
+    const users = db.prepare("SELECT id FROM users WHERE zernio_profile_id IS NOT NULL").all() as Pick<User, "id">[];
+    for (const u of users) {
+      try { await refreshAccountInsights(u.id); } catch { /* continue */ }
     }
   });
 

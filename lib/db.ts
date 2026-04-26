@@ -98,6 +98,54 @@ function migrate(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_insights_post ON post_insights(post_id);
+
+    CREATE TABLE IF NOT EXISTS account_insights (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      followers INTEGER NOT NULL DEFAULT 0,
+      following INTEGER NOT NULL DEFAULT 0,
+      media_count INTEGER NOT NULL DEFAULT 0,
+      profile_views INTEGER NOT NULL DEFAULT 0,
+      impressions INTEGER NOT NULL DEFAULT 0,
+      reach INTEGER NOT NULL DEFAULT 0,
+      fetched_at INTEGER NOT NULL,
+      UNIQUE(user_id, platform)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_account_insights_user ON account_insights(user_id);
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      role TEXT NOT NULL DEFAULT 'viewer',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      UNIQUE(workspace_owner_id, email)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_team_owner ON team_members(workspace_owner_id);
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      label TEXT NOT NULL DEFAULT '?',
+      theme TEXT NOT NULL DEFAULT 'blue',
+      status TEXT NOT NULL DEFAULT 'active',
+      tags TEXT NOT NULL DEFAULT '[]',
+      goal TEXT NOT NULL DEFAULT '',
+      deadline INTEGER,
+      post_count_published INTEGER NOT NULL DEFAULT 0,
+      post_count_total INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
   `);
 
   const mediaCols = db.prepare("PRAGMA table_info(media)").all() as Array<{
@@ -188,6 +236,47 @@ export type PostInsight = {
   reach: number;
   raw_json: string | null;
   fetched_at: number;
+};
+
+export type AccountInsight = {
+  id: number;
+  user_id: number;
+  platform: string;
+  account_id: string;
+  followers: number;
+  following: number;
+  media_count: number;
+  profile_views: number;
+  impressions: number;
+  reach: number;
+  fetched_at: number;
+};
+
+export type TeamMember = {
+  id: number;
+  workspace_owner_id: number;
+  email: string;
+  user_id: number | null;
+  role: "admin" | "editor" | "viewer";
+  status: "pending" | "active";
+  name: string | null;
+  created_at: number;
+};
+
+export type Project = {
+  id: number;
+  user_id: number;
+  name: string;
+  description: string;
+  label: string;
+  theme: string;
+  status: "active" | "paused" | "completed";
+  tags: string;
+  goal: string;
+  deadline: number | null;
+  post_count_published: number;
+  post_count_total: number;
+  created_at: number;
 };
 
 export type Post = {

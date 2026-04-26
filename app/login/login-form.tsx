@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/icons";
 
 export function LoginForm() {
   const router = useRouter();
@@ -34,16 +35,12 @@ export function LoginForm() {
     }
 
     if (mode === "register") {
-      // After register, log in immediately
       const loginRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      if (!loginRes.ok) {
-        setMode("login");
-        return;
-      }
+      if (!loginRes.ok) { setMode("login"); return; }
     }
 
     router.push("/dashboard");
@@ -51,53 +48,80 @@ export function LoginForm() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex rounded-lg border border-neutral-700 overflow-hidden text-sm">
-        <button
-          type="button"
-          onClick={() => { setMode("login"); setError(""); }}
-          className={"flex-1 py-2 transition " + (mode === "login" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-white")}
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMode("register"); setError(""); }}
-          className={"flex-1 py-2 transition " + (mode === "register" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-white")}
-        >
-          Registrieren
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Mode toggle */}
+      <div className="glass" style={{
+        padding: 4, borderRadius: 999, display: "flex", gap: 2,
+      }}>
+        {(["login", "register"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setMode(m); setError(""); }}
+            className={m === mode ? "hs-btn hs-btn-primary" : "hs-btn hs-btn-ghost"}
+            style={{ flex: 1, justifyContent: "center", padding: "8px 14px", fontSize: 13 }}
+          >
+            {m === "login" ? "Anmelden" : "Registrieren"}
+          </button>
+        ))}
       </div>
 
-      <form onSubmit={submit} className="space-y-3">
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {mode === "register" && (
-          <input
-            type="text"
-            placeholder="Name (optional)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
-          />
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>Name (optional)</label>
+            <input
+              className="hs-input"
+              type="text"
+              placeholder="Jonas Müller"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
         )}
-        <input
-          type="email"
-          placeholder="Email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
-        />
-        <input
-          type="password"
-          placeholder="Passwort"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
-        />
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>E-Mail</label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }}>
+              <Icon name="mail" size={16}/>
+            </span>
+            <input
+              className="hs-input"
+              type="email"
+              placeholder="jonas@bkc-consulting.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>Passwort</label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }}>
+              <Icon name="lock" size={16}/>
+            </span>
+            <input
+              className="hs-input"
+              type="password"
+              placeholder="••••••••••"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
+        </div>
 
         {error && (
-          <div className="rounded-md bg-red-900/20 border border-red-900/40 p-2 text-xs text-red-300">
+          <div style={{
+            padding: "10px 14px", borderRadius: 12, fontSize: 13, fontWeight: 500,
+            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
+            color: "#f87171",
+          }}>
             {error}
           </div>
         )}
@@ -105,9 +129,11 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-neutral-100 hover:bg-white text-neutral-900 font-medium py-2 text-sm transition disabled:opacity-50"
+          className="hs-btn hs-btn-primary"
+          style={{ width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginTop: 4, opacity: loading ? 0.6 : 1 }}
         >
-          {loading ? "..." : mode === "login" ? "Einloggen" : "Account erstellen"}
+          <Icon name="bolt" size={16}/>
+          {loading ? "Einen Moment…" : mode === "login" ? "Anmelden" : "Account erstellen"}
         </button>
       </form>
     </div>

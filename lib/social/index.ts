@@ -2,11 +2,13 @@ import path from "path";
 import { getDb, Post, Media, User } from "../db";
 import { uploadMediaToZernio, zernioPost, getConnectedAccounts, ZernioMediaItem } from "./zernio";
 import { refreshPostInsights } from "./insights";
+import { toZernioSpecific, defaultFormat } from "./platform-formats";
 
 type PostMeta = {
   platforms: string[];
   media_ids: number[];
-  post_type: "feed" | "story" | "reel";
+  post_type: string;
+  platform_formats?: Record<string, string>;
 };
 
 export async function publishPost(postId: number): Promise<void> {
@@ -24,7 +26,7 @@ export async function publishPost(postId: number): Promise<void> {
   const meta = JSON.parse(post.platforms_json) as PostMeta;
   const mediaIds: number[] = meta.media_ids ?? [post.media_id];
   const platforms: string[] = meta.platforms ?? [];
-  const postType: string = meta.post_type ?? "feed";
+  const platformFormats: Record<string, string> = meta.platform_formats ?? {};
 
   // Upload all media files to Zernio CDN
   const mediaItems: ZernioMediaItem[] = [];
@@ -47,9 +49,10 @@ export async function publishPost(postId: number): Promise<void> {
   const targetAccounts = allAccounts
     .filter((a) => platforms.includes(a.platform) && !a.disconnected)
     .map((a) => {
+      const format = platformFormats[a.platform] ?? defaultFormat(a.platform);
+      const specific = toZernioSpecific(a.platform, format);
       const acc: Record<string, unknown> = { platform: a.platform, accountId: a._id };
-      if (postType === "story") acc.platformSpecificData = { contentType: "story" };
-      else if (postType === "reel") acc.platformSpecificData = { contentType: "reel" };
+      if (Object.keys(specific).length > 0) acc.platformSpecificData = specific;
       return acc;
     });
 

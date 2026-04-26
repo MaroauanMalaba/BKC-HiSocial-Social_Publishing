@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { PlatformLogo } from "@/components/ui/platform-logos";
+import { Icon } from "@/components/ui/icons";
 
 type ZernioAccount = {
   _id: string;
@@ -10,107 +12,69 @@ type ZernioAccount = {
   disconnected?: boolean;
 };
 
-const PLATFORMS = [
-  { id: "instagram", label: "Instagram", color: "from-pink-500/20 to-orange-500/10 border-pink-900/40" },
-  { id: "facebook", label: "Facebook", color: "from-blue-500/20 to-indigo-500/10 border-blue-900/40" },
-  { id: "tiktok", label: "TikTok", color: "from-neutral-700/40 to-neutral-800/20 border-neutral-700" },
-  { id: "youtube", label: "YouTube", color: "from-red-500/20 to-red-900/10 border-red-900/40" },
-  { id: "linkedin", label: "LinkedIn", color: "from-blue-600/20 to-blue-900/10 border-blue-800/40" },
-];
-
 export function AccountManager({ initialAccounts }: { initialAccounts: ZernioAccount[] }) {
   const [accounts, setAccounts] = useState<ZernioAccount[]>(initialAccounts);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function refresh() {
+    setRefreshing(true);
     const res = await fetch("/api/zernio/accounts");
     const json = await res.json();
     if (json.accounts) setAccounts(json.accounts);
+    setRefreshing(false);
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        {PLATFORMS.map((p) => {
-          const connected = accounts.filter((a) => a.platform === p.id && !a.disconnected);
-          return (
-            <div key={p.id} className={"rounded-xl border bg-gradient-to-br p-5 flex flex-col gap-4 " + p.color}>
-              <div>
-                <div className="text-xs uppercase tracking-widest text-white/60">{p.label}</div>
-                <div className="mt-2 text-3xl font-semibold tabular-nums text-white">{connected.length}</div>
-                <div className="text-xs text-white/60 mt-1">
-                  {connected.length > 0
-                    ? connected.map((a) => a.username ? `@${a.username}` : a.name).join(", ")
-                    : "Nicht verbunden"}
-                </div>
-              </div>
-              <div className="mt-auto">
-                <a
-                  href={`/api/zernio/connect?platform=${p.id}`}
-                  className="block rounded-md bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-2 text-xs font-medium text-white text-center transition"
-                >
-                  {connected.length > 0 ? "Weiteren verbinden" : `${p.label} verbinden`}
-                </a>
-              </div>
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {accounts.map((a, i) => (
+        <div key={a._id} style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "14px 0",
+          borderTop: i ? "1px solid var(--glass-border)" : "none",
+        }}>
+          <div style={{
+            width: 46, height: 46, borderRadius: 12, flexShrink: 0,
+            background: "var(--glass-bg-strong)", border: "1px solid var(--glass-border)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <PlatformLogo platform={a.platform} size={24}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text-1)" }}>
+                {a.name}
+              </span>
+              {a.disconnected
+                ? <span className="hs-chip hs-chip-amber">⚠ Getrennt</span>
+                : <span className="hs-chip hs-chip-green"><Icon name="check" size={10}/>Verbunden</span>
+              }
             </div>
-          );
-        })}
-      </div>
-
-      {accounts.length > 0 && (
-        <div className="rounded-xl border border-neutral-800 overflow-hidden">
-          <table className="min-w-full text-sm">
-            <thead className="bg-neutral-900/60">
-              <tr>
-                <Th>Plattform</Th>
-                <Th>Name</Th>
-                <Th>Username</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((a) => (
-                <tr key={a._id} className="border-t border-neutral-800">
-                  <Td><PlatformBadge platform={a.platform} /></Td>
-                  <Td>{a.name}</Td>
-                  <Td className="text-neutral-400">{a.username ? `@${a.username}` : "—"}</Td>
-                  <Td>
-                    {a.disconnected
-                      ? <span className="text-xs text-red-400">Getrennt</span>
-                      : <span className="text-xs text-green-400">✓ Aktiv</span>}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <div style={{ fontSize: 13, color: "var(--text-2)", fontWeight: 500, marginTop: 2 }}>
+              {a.username ? `@${a.username}` : "—"} · {a.platform.charAt(0).toUpperCase() + a.platform.slice(1)}
+            </div>
+          </div>
+          {a.disconnected ? (
+            <a href={`/api/zernio/connect?platform=${a.platform}`} className="hs-btn hs-btn-primary" style={{ padding: "8px 14px", fontSize: 13 }}>
+              Erneuern
+            </a>
+          ) : (
+            <button className="hs-btn hs-btn-glass" style={{ padding: "8px 14px", fontSize: 13 }}>
+              Verwalten
+            </button>
+          )}
         </div>
-      )}
-
-      <button onClick={refresh} className="text-xs text-neutral-500 hover:text-neutral-300 transition">
-        Status aktualisieren
-      </button>
+      ))}
+      <div style={{ paddingTop: 16, borderTop: "1px solid var(--glass-border)" }}>
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          className="hs-btn hs-btn-ghost"
+          style={{ fontSize: 13, opacity: refreshing ? 0.5 : 1 }}
+        >
+          <Icon name="rotate" size={14}/>
+          {refreshing ? "Aktualisiere…" : "Status aktualisieren"}
+        </button>
+      </div>
     </div>
   );
-}
-
-function PlatformBadge({ platform }: { platform: string }) {
-  const styles: Record<string, string> = {
-    instagram: "bg-pink-900/30 text-pink-300 border-pink-900/60",
-    facebook: "bg-blue-900/30 text-blue-300 border-blue-900/60",
-    tiktok: "bg-neutral-800 text-neutral-300 border-neutral-700",
-    youtube: "bg-red-900/30 text-red-300 border-red-900/60",
-    linkedin: "bg-blue-800/30 text-blue-300 border-blue-700/60",
-  };
-  return (
-    <span className={"text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 border " + (styles[platform] || "bg-neutral-800 text-neutral-400")}>
-      {platform}
-    </span>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left text-xs uppercase tracking-wide text-neutral-500 px-4 py-2">{children}</th>;
-}
-
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={"px-4 py-2 " + className}>{children}</td>;
 }

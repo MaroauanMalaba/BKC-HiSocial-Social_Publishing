@@ -23,12 +23,12 @@ export async function compressImage(
 
   await img
     .resize({
-      width: 1920,
-      height: 1920,
+      width: 1440,
+      height: 1440,
       fit: "inside",
       withoutEnlargement: true,
     })
-    .jpeg({ quality: 82, mozjpeg: true })
+    .jpeg({ quality: 75, mozjpeg: true })
     .toFile(outputPath);
 
   const stat = fs.statSync(outputPath);
@@ -69,12 +69,12 @@ export async function compressVideo(
       .videoCodec("libx264")
       .audioCodec("aac")
       .outputOptions([
-        "-preset veryfast",
-        "-crf 23",
+        "-preset medium",
+        "-crf 28",
         "-movflags +faststart",
         "-pix_fmt yuv420p",
         "-vf scale='min(1080,iw)':-2",
-        "-b:a 128k",
+        "-b:a 96k",
       ])
       .format("mp4")
       .on("progress", (info) => {

@@ -66,7 +66,8 @@ export async function getConnectedAccounts(profileId: string): Promise<ZernioAcc
   });
   const json = await res.json();
   if (!res.ok) return [];
-  return (json.accounts ?? json ?? []) as ZernioAccount[];
+  const raw = json.accounts ?? json;
+  return Array.isArray(raw) ? (raw as ZernioAccount[]) : [];
 }
 
 // --- Media Upload ---
@@ -172,5 +173,28 @@ export async function getPostAnalytics(postId: string): Promise<ZernioAnalytics>
     shares: Number(d.shares ?? d.shareCount ?? 0),
     saves: Number(d.saved ?? d.saves ?? 0),
     reach: Number(d.reach ?? 0),
+  };
+}
+
+export type ZernioAccountAnalytics = {
+  followers: number;
+  following: number;
+  mediaCount: number;
+  profileViews: number;
+  impressions: number;
+  reach: number;
+};
+
+export async function getAccountAnalytics(accountId: string): Promise<ZernioAccountAnalytics> {
+  const res = await fetch(`${BASE}/accounts/${accountId}/analytics`, { headers: headers() });
+  const json = await res.json();
+  const d = json?.analytics ?? json ?? {};
+  return {
+    followers: Number(d.followers ?? d.followerCount ?? d.followersCount ?? 0),
+    following: Number(d.following ?? d.followingCount ?? 0),
+    mediaCount: Number(d.mediaCount ?? d.posts ?? d.postCount ?? 0),
+    profileViews: Number(d.profileViews ?? d.profileVisits ?? 0),
+    impressions: Number(d.impressions ?? 0),
+    reach: Number(d.reach ?? d.accountReach ?? 0),
   };
 }

@@ -20,13 +20,17 @@ export async function GET() {
   const insightsMap = getInsightsForUser(user.id);
 
   return NextResponse.json({
-    posts: posts.map((p) => ({
-      id: p.id,
-      caption: p.caption,
-      created_at: p.created_at,
-      platforms: JSON.parse(p.platforms_json),
-      results: p.results_json ? JSON.parse(p.results_json) : [],
-      insights: insightsMap.get(p.id) ?? [],
-    })),
+    posts: posts.map((p) => {
+      const meta = JSON.parse(p.platforms_json);
+      const platformList: string[] = Array.isArray(meta.platforms) ? meta.platforms : [];
+      return {
+        id: p.id,
+        caption: p.caption,
+        created_at: p.created_at,
+        platforms: platformList.map((pl) => ({ platform: pl })),
+        results: p.results_json ? JSON.parse(p.results_json) : [],
+        insights: insightsMap.get(p.id) ?? [],
+      };
+    }),
   });
 }

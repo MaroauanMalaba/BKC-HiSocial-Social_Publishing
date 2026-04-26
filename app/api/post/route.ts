@@ -8,8 +8,10 @@ const schema = z.object({
   media_ids: z.array(z.number()).min(1).max(10),
   caption: z.string().default(""),
   platforms: z.array(z.string()).min(1),
-  post_type: z.enum(["feed", "story", "reel"]).default("feed"),
+  platform_formats: z.record(z.string(), z.string()).optional(),
+  post_type: z.string().default("feed"), // legacy fallback
   scheduled_at: z.number().optional(),
+  is_draft: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -34,7 +36,8 @@ export async function POST(req: NextRequest) {
   const primaryMediaId = parsed.data.media_ids[0];
   const now = Date.now();
   const scheduled = parsed.data.scheduled_at;
-  const status = scheduled && scheduled > now ? "scheduled" : "publishing";
+  const status = parsed.data.is_draft ? "draft"
+    : (scheduled && scheduled > now ? "scheduled" : "publishing");
 
   const info = db.prepare(
     `INSERT INTO posts (user_id, media_id, caption, platforms_json, scheduled_at, status, created_at, updated_at)
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
       platforms: parsed.data.platforms,
       media_ids: parsed.data.media_ids,
       post_type: parsed.data.post_type,
+      platform_formats: parsed.data.platform_formats ?? {},
     }),
     scheduled ?? null,
     status,
@@ -68,10 +72,15 @@ export async function GET() {
   const db = getDb();
   const rows = db.prepare("SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 200").all(user.id) as Post[];
   return NextResponse.json({
-    posts: rows.map((p) => ({
-      ...p,
-      platforms: JSON.parse(p.platforms_json),
-      results: p.results_json ? JSON.parse(p.results_json) : null,
-    })),
+    posts: rows.map((p) => {
+      let meta: Record<string, unknown> = {};
+      try { meta = JSON.parse(p.platforms_json); } catch { /* ignore */ }
+      return {
+        ...p,
+        platforms: Array.isArray(meta.platforms) ? (meta.platforms as string[]).map((pl) => ({ platform: pl })) : [],
+        post_type: (meta.post_type as string) ?? "feed",
+        results: p.results_json ? (() => { try { return JSON.parse(p.results_json!); } catch { return null; } })() : null,
+      };
+    }),
   });
 }

@@ -1,23 +1,23 @@
-import { getDb, Post, User, PostInsight } from "../db";
-import { getPostAnalytics } from "./ayrshare";
+import { getDb, Post, PostInsight, AccountInsight, User } from "../db";
+import { getPostAnalytics, getAccountAnalytics, getConnectedAccounts } from "./zernio";
 
 export async function refreshPostInsights(postId: number): Promise<number> {
   const db = getDb();
   const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId) as Post | undefined;
   if (!post || post.status !== "published") return 0;
 
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(post.user_id) as User | undefined;
-  if (!user?.ayrshare_profile_key) return 0;
-
   const result = post.results_json ? JSON.parse(post.results_json) : null;
-  if (!result?.postIds) return 0;
+  if (!result?.ok || !result?.postId) return 0;
 
-  const now = Date.now();
-  let updated = 0;
+  const zernioPostId: string = result.postId;
+  const meta = JSON.parse(post.platforms_json);
+  const platforms: string[] = Array.isArray(meta.platforms) ? meta.platforms : [];
+  if (!platforms.length) return 0;
 
-  for (const [platform, postId_] of Object.entries(result.postIds as Record<string, string>)) {
-    try {
-      const metrics = await getPostAnalytics(user.ayrshare_profile_key, platform, postId_);
+  try {
+    const metrics = await getPostAnalytics(zernioPostId);
+    const now = Date.now();
+    for (const platform of platforms) {
       db.prepare(
         `INSERT INTO post_insights
           (post_id, platform, external_id, views, likes, comments, shares, saves, reach, raw_json, fetched_at)
@@ -27,17 +27,50 @@ export async function refreshPostInsights(postId: number): Promise<number> {
            shares = excluded.shares, saves = excluded.saves, reach = excluded.reach,
            raw_json = excluded.raw_json, fetched_at = excluded.fetched_at`
       ).run(
-        postId, platform, postId_,
+        postId, platform, zernioPostId,
         metrics.views, metrics.likes, metrics.comments,
         metrics.shares, metrics.saves, metrics.reach,
         null, now
       );
-      updated++;
+    }
+    return platforms.length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function refreshAccountInsights(userId: number): Promise<void> {
+  const db = getDb();
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as User | undefined;
+  if (!user?.zernio_profile_id) return;
+
+  const accounts = await getConnectedAccounts(user.zernio_profile_id);
+  const now = Date.now();
+
+  for (const account of accounts) {
+    if (account.disconnected) continue;
+    try {
+      const m = await getAccountAnalytics(account._id);
+      db.prepare(
+        `INSERT INTO account_insights
+          (user_id, platform, account_id, followers, following, media_count, profile_views, impressions, reach, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, platform) DO UPDATE SET
+           account_id = excluded.account_id,
+           followers = excluded.followers, following = excluded.following,
+           media_count = excluded.media_count, profile_views = excluded.profile_views,
+           impressions = excluded.impressions, reach = excluded.reach,
+           fetched_at = excluded.fetched_at`
+      ).run(
+        userId, account.platform, account._id,
+        m.followers, m.following, m.mediaCount,
+        m.profileViews, m.impressions, m.reach,
+        now
+      );
     } catch {
-      // continue with next platform
+      // continue — one platform failing shouldn't block others
     }
   }
-  return updated;
 }
 
 export function getInsightsForPost(postId: number): PostInsight[] {
@@ -54,9 +87,14 @@ export function getInsightsForUser(userId: number): Map<number, PostInsight[]> {
   ).all(userId) as PostInsight[];
   const map = new Map<number, PostInsight[]>();
   for (const row of rows) {
-    const list = map.get(row.post_id) || [];
+    const list = map.get(row.post_id) ?? [];
     list.push(row);
     map.set(row.post_id, list);
   }
   return map;
+}
+
+export function getAccountInsightsForUser(userId: number): AccountInsight[] {
+  const db = getDb();
+  return db.prepare("SELECT * FROM account_insights WHERE user_id = ?").all(userId) as AccountInsight[];
 }
