@@ -103,11 +103,16 @@ export async function uploadMediaToZernio(
 
 // --- Posting ---
 
+export type ZernioMediaItem = {
+  url: string;
+  type: "image" | "video" | "gif";
+};
+
 export type ZernioPostOptions = {
   profileId: string;
   content: string;
-  platforms: Array<{ platform: string; accountId: string }>;
-  mediaUrls?: string[];
+  platforms: Array<{ platform: string; accountId: string; platformSpecificData?: Record<string, unknown> }>;
+  mediaItems?: ZernioMediaItem[];
   scheduledFor?: string;
 };
 
@@ -124,8 +129,8 @@ export async function zernioPost(options: ZernioPostOptions): Promise<ZernioPost
     profileId: options.profileId,
   };
 
-  if (options.mediaUrls?.length) {
-    body.mediaItems = options.mediaUrls.map((url) => ({ type: "image", url }));
+  if (options.mediaItems?.length) {
+    body.mediaItems = options.mediaItems;
   }
 
   if (options.scheduledFor) {

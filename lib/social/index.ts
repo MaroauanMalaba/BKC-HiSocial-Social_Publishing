@@ -1,6 +1,6 @@
 import path from "path";
 import { getDb, Post, Media, User } from "../db";
-import { uploadMediaToZernio, zernioPost, getConnectedAccounts } from "./zernio";
+import { uploadMediaToZernio, zernioPost, getConnectedAccounts, ZernioMediaItem } from "./zernio";
 import { refreshPostInsights } from "./insights";
 
 type PostMeta = {
@@ -27,15 +27,16 @@ export async function publishPost(postId: number): Promise<void> {
   const postType: string = meta.post_type ?? "feed";
 
   // Upload all media files to Zernio CDN
-  const mediaUrls: string[] = [];
+  const mediaItems: ZernioMediaItem[] = [];
   for (const mediaId of mediaIds) {
     const media = db.prepare("SELECT * FROM media WHERE id = ?").get(mediaId) as Media | undefined;
     if (!media?.compressed_path) return fail(postId, `Media ${mediaId} nicht fertig`);
     const filename = path.basename(media.compressed_path);
-    const contentType = media.kind === "video" ? "video/mp4" : "image/jpeg";
+    const isVideo = media.kind === "video";
+    const contentType = isVideo ? "video/mp4" : "image/jpeg";
     try {
       const url = await uploadMediaToZernio(media.compressed_path, filename, contentType);
-      mediaUrls.push(url);
+      mediaItems.push({ url, type: isVideo ? "video" : "image" });
     } catch (e) {
       return fail(postId, `Media Upload fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -60,7 +61,7 @@ export async function publishPost(postId: number): Promise<void> {
     profileId: user.zernio_profile_id,
     content: post.caption,
     platforms: targetAccounts as Array<{ platform: string; accountId: string }>,
-    mediaUrls,
+    mediaItems,
   });
 
   db.prepare("UPDATE posts SET status = ?, results_json = ?, updated_at = ? WHERE id = ?").run(
