@@ -125,6 +125,8 @@ function migrate(db: Database.Database) {
     db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
   if (!userNames.has("ayrshare_profile_key"))
     db.exec("ALTER TABLE users ADD COLUMN ayrshare_profile_key TEXT");
+  if (!userNames.has("zernio_profile_id"))
+    db.exec("ALTER TABLE users ADD COLUMN zernio_profile_id TEXT");
 }
 
 export type User = {
@@ -136,6 +138,7 @@ export type User = {
   provider_user_id: string | null;
   avatar_url: string | null;
   ayrshare_profile_key: string | null;
+  zernio_profile_id: string | null;
   created_at: number;
 };
 
