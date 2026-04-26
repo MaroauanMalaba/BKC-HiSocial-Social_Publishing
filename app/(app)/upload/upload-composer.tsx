@@ -17,54 +17,60 @@ type MediaInfo = {
   error?: string | null;
 };
 
+type PostType = "feed" | "story" | "reel";
+
 export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
   const [uploading, setUploading] = useState(false);
-  const [media, setMedia] = useState<MediaInfo | null>(null);
+  const [mediaList, setMediaList] = useState<MediaInfo[]>([]);
   const [caption, setCaption] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [postType, setPostType] = useState<PostType>("feed");
   const [schedule, setSchedule] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
-  const pollRef = useRef<number | null>(null);
+  const pollRefs = useRef<Map<number, number>>(new Map());
 
   useEffect(() => {
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-    };
+    return () => pollRefs.current.forEach((t) => window.clearInterval(t));
   }, []);
 
-  async function uploadFile(file: File) {
-    setUploading(true);
+  async function uploadFiles(files: FileList) {
     setError(null);
     setResult(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    const json = await res.json();
-    setUploading(false);
-    if (!res.ok) {
-      setError(json.error || "Upload failed");
-      return;
+    for (const file of Array.from(files)) {
+      setUploading(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      setUploading(false);
+      if (!res.ok) { setError(json.error || "Upload failed"); return; }
+      const newMedia: MediaInfo = { id: json.id, status: "pending" };
+      setMediaList((prev) => [...prev, newMedia]);
+      startPolling(json.id);
     }
-    setMedia({ id: json.id, status: "pending" });
-    startPolling(json.id);
   }
 
   function startPolling(id: number) {
-    if (pollRef.current) window.clearInterval(pollRef.current);
-    pollRef.current = window.setInterval(async () => {
+    const t = window.setInterval(async () => {
       const res = await fetch("/api/media");
       const json = await res.json();
       const m = json.media.find((x: MediaInfo) => x.id === id);
       if (m) {
-        setMedia(m);
+        setMediaList((prev) => prev.map((p) => (p.id === id ? m : p)));
         if (m.status === "ready" || m.status === "failed") {
-          if (pollRef.current) window.clearInterval(pollRef.current);
+          window.clearInterval(pollRefs.current.get(id));
+          pollRefs.current.delete(id);
         }
       }
     }, 500);
+    pollRefs.current.set(id, t);
+  }
+
+  function removeMedia(id: number) {
+    setMediaList((prev) => prev.filter((m) => m.id !== id));
   }
 
   function togglePlatform(platform: string) {
@@ -74,23 +80,24 @@ export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
     setSelected(next);
   }
 
+  const readyMedia = mediaList.filter((m) => m.status === "ready");
+  const processingMedia = mediaList.filter((m) => m.status === "processing" || m.status === "pending");
+  const isCarousel = readyMedia.length > 1;
+
   async function submitPost() {
-    if (!media || media.status !== "ready") return;
-    if (selected.size === 0) {
-      setError("Wähle mindestens eine Plattform");
-      return;
-    }
+    if (readyMedia.length === 0) return;
+    if (selected.size === 0) { setError("Wähle mindestens eine Plattform"); return; }
+    if (postType !== "story" && !caption.trim()) { setError("Caption fehlt"); return; }
     setPosting(true);
     setError(null);
 
     const body: Record<string, unknown> = {
-      media_id: media.id,
+      media_ids: readyMedia.map((m) => m.id),
       caption,
       platforms: Array.from(selected),
+      post_type: postType,
     };
-    if (schedule && scheduledAt) {
-      body.scheduled_at = new Date(scheduledAt).getTime();
-    }
+    if (schedule && scheduledAt) body.scheduled_at = new Date(scheduledAt).getTime();
 
     const res = await fetch("/api/post", {
       method: "POST",
@@ -99,18 +106,12 @@ export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
     });
     const json = await res.json();
     setPosting(false);
-    if (!res.ok) {
-      setError(json.error || "Post failed");
-      return;
-    }
-    setResult(
-      json.status === "scheduled"
-        ? `✔ Post #${json.id} geplant`
-        : `✔ Post #${json.id} wird jetzt veröffentlicht`
-    );
-    setMedia(null);
+    if (!res.ok) { setError(json.error || "Post failed"); return; }
+    setResult(json.status === "scheduled" ? `✔ Post #${json.id} geplant` : `✔ Post #${json.id} wird veröffentlicht`);
+    setMediaList([]);
     setCaption("");
     setSelected(new Set());
+    setPostType("feed");
     setSchedule(false);
     setScheduledAt("");
   }
@@ -128,24 +129,53 @@ export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5">
-        <label className="block text-sm font-medium mb-2">
-          Datei (Bild oder Video)
-        </label>
-        <input
-          type="file"
-          accept="image/*,video/*"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadFile(f);
-          }}
-          disabled={uploading}
-          className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-neutral-800 file:text-neutral-100 hover:file:bg-neutral-700"
-        />
-        {uploading && (
-          <p className="text-xs text-neutral-500 mt-2">Lade hoch…</p>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Dateien {isCarousel && <span className="text-xs text-neutral-400 ml-1">({readyMedia.length} Bilder — Carousel)</span>}
+          </label>
+          <input
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            onChange={(e) => { if (e.target.files?.length) uploadFiles(e.target.files); }}
+            disabled={uploading || mediaList.length >= 10}
+            className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-neutral-800 file:text-neutral-100 hover:file:bg-neutral-700"
+          />
+          {uploading && <p className="text-xs text-neutral-500 mt-2">Lade hoch…</p>}
+        </div>
+
+        {mediaList.map((m) => (
+          <div key={m.id} className="relative">
+            <CompressionStatus media={m} />
+            {m.status === "ready" && (
+              <button onClick={() => removeMedia(m.id)} className="absolute top-0 right-0 text-xs text-red-400 hover:text-red-300">✕ entfernen</button>
+            )}
+          </div>
+        ))}
+
+        {processingMedia.length > 0 && (
+          <p className="text-xs text-neutral-500">{processingMedia.length} Datei(en) werden noch komprimiert…</p>
         )}
-        {media && <CompressionStatus media={media} />}
+      </div>
+
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5">
+        <label className="block text-sm font-medium mb-2">Post-Typ</label>
+        <div className="flex gap-2">
+          {(["feed", "story", "reel"] as PostType[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setPostType(t)}
+              className={"text-xs rounded-full px-3 py-1.5 border transition " + (postType === t ? "bg-white text-neutral-900 border-white" : "text-neutral-400 border-neutral-700 hover:border-neutral-500")}
+            >
+              {t === "feed" ? "Feed" : t === "story" ? "Story" : "Reel"}
+            </button>
+          ))}
+        </div>
+        {isCarousel && postType !== "feed" && (
+          <p className="text-xs text-yellow-400 mt-2">Carousel ist nur für Feed Posts — Story/Reel braucht eine einzelne Datei.</p>
+        )}
       </div>
 
       <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 space-y-4">
@@ -215,7 +245,7 @@ export function UploadComposer({ platforms }: { platforms: PlatformOption[] }) {
         <button
           onClick={submitPost}
           disabled={
-            !media || media.status !== "ready" || posting || selected.size === 0 || !caption.trim()
+            readyMedia.length === 0 || processingMedia.length > 0 || posting || selected.size === 0
           }
           className="rounded-md bg-white text-neutral-900 font-medium px-4 py-2 text-sm hover:bg-neutral-200 disabled:opacity-50"
         >
